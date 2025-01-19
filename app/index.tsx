@@ -9,6 +9,7 @@ import {
   Pressable,
   Text,
   StyleSheet,
+  TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -17,6 +18,7 @@ import { sampleTasks } from './data/sampleTasks';
 import { ITask, MODAL_OPEN_FROM_STATES } from '@/types/appType';
 import CustomModal from '@/components/CustomModal';
 import { useRouter } from 'expo-router';
+import useDebounce from '@/hooks/useDounce';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -29,6 +31,8 @@ export default function App() {
   const [tasks, setTasks] = useState<ITask[]>([]);
   const [newTask, setNewTask] = useState('');
   const [editingTask, setEditingTask] = useState<ITask | null>(null);
+
+  const [filteredTasks, setFilteredTasks] = useState<ITask[]>([]);
 
   const [taskToNotify, setTaskToNotify] = useState<ITask | null>(null);
   const [isAddTaskModalVisible, setIsAddTaskModalVisible] = useState<{
@@ -204,41 +208,104 @@ export default function App() {
           >
             Task List
           </Text>
-          <FlatList
-            data={tasks}
-            ListEmptyComponent={() => (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ fontSize: 20, fontWeight: 'normal' }}>
-                  No tasks found
-                </Text>
-              </View>
-            )}
-            renderItem={({ item }) => (
-              <Task
-                task={item}
-                onNotificationClick={handleNotification}
-                onToggleClick={onTaskToggle}
-                onDeleteClick={deleteActionSheetHandler}
-                onEditClick={handleEditClick}
-                onTaskClick={onTaskClick}
+          <Search tasks={tasks} setTasks={setFilteredTasks} />
+          {filteredTasks?.length > 0 ? (
+            <View>
+              <FlatList
+                data={filteredTasks}
+                ListEmptyComponent={() => (
+                  <View
+                    style={{
+                      flex: 1,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginTop: 20,
+                    }}
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: 'normal' }}>
+                      No tasks found
+                    </Text>
+                  </View>
+                )}
+                renderItem={({ item }) => (
+                  <Task
+                    task={item}
+                    onNotificationClick={handleNotification}
+                    onToggleClick={onTaskToggle}
+                    onDeleteClick={deleteActionSheetHandler}
+                    onEditClick={handleEditClick}
+                    onTaskClick={onTaskClick}
+                  />
+                )}
+                keyExtractor={(item) => item.id}
+                style={{ marginTop: 20 }}
               />
-            )}
-            keyExtractor={(item) => item.id}
-            style={{ marginTop: 20 }}
-          />
+            </View>
+          ) : (
+            <View>
+              <Text>No tasks found</Text>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+const Search = ({
+  tasks,
+  setTasks,
+}: {
+  tasks: ITask[];
+  setTasks: (tasks: ITask[]) => void;
+}) => {
+  const [searchText, setSearchText] = useState('');
+
+  const OriginalTasks = tasks;
+
+  const debouncedSearchText = useDebounce(searchText, 500);
+
+  useEffect(() => {
+    const filteredTasks = tasks.filter((task) =>
+      task.title.toLowerCase().includes(debouncedSearchText.toLowerCase())
+    );
+    setTasks(filteredTasks);
+    console.log(
+      'debouncedSearchText.length === 0',
+      debouncedSearchText.length === 0
+    );
+    if (debouncedSearchText.length === 0) {
+      console.log('OriginalTasks', OriginalTasks);
+      setTasks(OriginalTasks);
+    }
+  }, [debouncedSearchText]);
+
+  const handleSearch = (text: string) => {
+    setSearchText(text);
+  };
+
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <TextInput
+        placeholder="Search"
+        style={styles.searchInput}
+        onChangeText={(text) => handleSearch(text)}
+        value={searchText}
+      />
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 10,
+    borderRadius: 5,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   addTaskButton: {
     backgroundColor: '#574bc4',
     padding: 10,
