@@ -51,6 +51,10 @@ export default function App() {
     requestPermissions();
   }, []);
 
+  useEffect(() => {
+    setFilteredTasks(tasks);
+  }, [tasks]);
+
   const requestPermissions = async () => {
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') {
@@ -132,10 +136,13 @@ export default function App() {
     setTaskToNotify(task);
   };
 
-  const deleteActionSheetHandler = (task: ITask) => {
-    console.log('Delete action sheet received for task:', task.title);
-    setTasks((prevTasks) => prevTasks.filter((t) => t.id !== task.id));
-    AsyncStorage.removeItem(`@task_${task.id}`);
+  const deleteHandler = async (task: ITask) => {
+    const _tasks = await AsyncStorage.getItem('@tasks');
+    const _tasksArray = JSON.parse(_tasks || '[]');
+    const updatedTasks = _tasksArray.filter((t: ITask) => t.id !== task.id);
+    setTasks(updatedTasks);
+    await AsyncStorage.setItem('@tasks', JSON.stringify(updatedTasks));
+    setFilteredTasks(updatedTasks);
   };
 
   const onTaskToggle = (id: string) => {
@@ -232,7 +239,7 @@ export default function App() {
                     task={item}
                     onNotificationClick={handleNotification}
                     onToggleClick={onTaskToggle}
-                    onDeleteClick={deleteActionSheetHandler}
+                    onDeleteClick={deleteHandler}
                     onEditClick={handleEditClick}
                     onTaskClick={onTaskClick}
                   />
