@@ -14,23 +14,19 @@ interface TaskProps {
     title: string;
     completed: boolean;
   };
-  onTaskToggle: (id: string) => void;
-  handleNotification: (task: TaskProps['task']) => void;
-  deleteActionSheetHandler: (task: TaskProps['task']) => void;
-  handleTitleChange: (task: TaskProps['task']) => void;
-  editingTask: TaskProps['task'] | null;
-  setEditingTask: (task: TaskProps['task']) => void;
+  onNotificationClick: (task: TaskProps['task']) => void;
+  onEditClick: (task: TaskProps['task']) => void;
+  onDeleteClick: (task: TaskProps['task']) => void;
+  onToggleClick: (id: string) => void;
 }
 
 const Task: FC<TaskProps> = ({
   task,
-  onTaskToggle,
-  handleNotification,
-  deleteActionSheetHandler,
-  handleTitleChange,
 
-  editingTask,
-  setEditingTask,
+  onNotificationClick,
+  onEditClick,
+  onDeleteClick,
+  onToggleClick,
 }) => {
   return (
     <View
@@ -50,7 +46,7 @@ const Task: FC<TaskProps> = ({
     >
       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
         <TouchableOpacity
-          onPress={() => onTaskToggle(task.id)}
+          onPress={() => onToggleClick(task.id)}
           style={{ marginRight: 15 }}
         >
           <Text style={{ fontSize: 20 }}>{task.completed ? '☑️' : '⬜️'}</Text>
@@ -63,21 +59,7 @@ const Task: FC<TaskProps> = ({
             color: task.completed ? '#aaa' : '#333',
           }}
         >
-          {editingTask?.id === task.id ? (
-            <TextInput
-              value={task.title}
-              onChangeText={(text) => handleTitleChange(task)}
-              style={{
-                paddingHorizontal: 4,
-                width: '70%',
-                fontSize: 16,
-                fontWeight: 'bold',
-                borderWidth: 1,
-              }}
-            />
-          ) : (
-            task.title
-          )}
+          {task.title}
         </Text>
       </View>
       <View
@@ -88,7 +70,7 @@ const Task: FC<TaskProps> = ({
       >
         {/* edit icon */}
         <TouchableOpacity
-          onPress={() => setEditingTask(task)}
+          onPress={() => onEditClick(task)}
           style={{
             marginLeft: 'auto',
             paddingHorizontal: 10,
@@ -99,7 +81,7 @@ const Task: FC<TaskProps> = ({
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => handleNotification(task)}
+          onPress={() => onNotificationClick(task)}
           style={{
             marginLeft: 'auto',
             paddingHorizontal: 10,
@@ -109,7 +91,7 @@ const Task: FC<TaskProps> = ({
           <IconSymbol name="bell.fill" size={20} color="#574bc4" />
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => deleteActionSheetHandler(task)}
+          onPress={() => onDeleteClick(task)}
           style={{
             marginLeft: 'auto',
             paddingHorizontal: 10,

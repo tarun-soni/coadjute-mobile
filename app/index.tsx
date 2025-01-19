@@ -1,25 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   Button,
   FlatList,
   SafeAreaView,
   KeyboardAvoidingView,
-  ScrollView,
-  Keyboard,
-  Modal,
-  Dimensions,
-  Pressable,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Task from '@/components/Task';
 import { sampleTasks } from './data/sampleTasks';
-import { ITask } from '@/types/appType';
-import TaskForm from '@/components/TaskForm';
-import { IconSymbol } from '@/components/ui/IconSymbol';
+import { ITask, MODAL_OPEN_FROM_STATES } from '@/types/appType';
+import CustomModal from '@/components/CustomModal';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -32,7 +24,17 @@ export default function App() {
   const [tasks, setTasks] = useState<ITask[]>(sampleTasks as ITask[]);
   const [newTask, setNewTask] = useState('');
   const [editingTask, setEditingTask] = useState<ITask | null>(null);
-  const [isAddTaskModalVisible, setIsAddTaskModalVisible] = useState(false);
+
+  const [taskToNotify, setTaskToNotify] = useState<ITask | null>(null);
+  const [isAddTaskModalVisible, setIsAddTaskModalVisible] = useState<{
+    state: boolean;
+    type: MODAL_OPEN_FROM_STATES;
+  }>({
+    state: false,
+    type: 'FROM_ADD_TASK',
+  });
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
   useEffect(() => {
     loadTasks();
     requestPermissions();
@@ -59,21 +61,28 @@ export default function App() {
     AsyncStorage.removeItem('@tasks');
   };
 
-  const addTask = async () => {
+  const handleAction = async () => {
     try {
       if (newTask.trim() === '') return;
-      const newTaskItem = { id: Date.now().toString(), title: newTask };
-      const updatedTasks = [...tasks, newTaskItem];
-      setTasks(updatedTasks as ITask[]);
-      await AsyncStorage.setItem('@tasks', JSON.stringify(updatedTasks));
-      // await scheduleNotification(newTaskItem as unknown as ITask);
+      if (isAddTaskModalVisible.type === 'FROM_UPDATE_TASK' && editingTask) {
+        const updatedTasks = tasks.map((task) =>
+          task.id === editingTask.id ? { ...task, title: newTask } : task
+        );
+        setTasks(updatedTasks as ITask[]);
+        await AsyncStorage.setItem('@tasks', JSON.stringify(updatedTasks));
+        setEditingTask(null);
+        setIsModalVisible(false);
+      } else if (isAddTaskModalVisible.type === 'FROM_ADD_TASK') {
+        const newTaskItem = { id: Date.now().toString(), title: newTask };
+        const updatedTasks = [...tasks, newTaskItem];
+        setTasks(updatedTasks as ITask[]);
+        await AsyncStorage.setItem('@tasks', JSON.stringify(updatedTasks));
+        setIsModalVisible(false);
+      }
       setNewTask('');
+      setIsModalVisible(false);
     } catch (error) {
-      console.error('Error adding task:', error);
-    } finally {
-      setNewTask('');
-      Keyboard.dismiss();
-      setIsAddTaskModalVisible(false);
+      console.error('Error handling action:', error);
     }
   };
 
@@ -94,8 +103,10 @@ export default function App() {
 
   const handleNotification = (task: ITask) => {
     console.log('Notification received for task:', task.title);
-    alert(`Notification received for task: ${task.title}`);
-    scheduleNotification(task);
+    setIsModalVisible(true);
+    setIsAddTaskModalVisible({ state: true, type: 'FROM_NOTIFY_TASK' });
+    setTaskToNotify(task);
+    // scheduleNotification(task);
   };
 
   const deleteActionSheetHandler = (task: ITask) => {
@@ -122,20 +133,39 @@ export default function App() {
     AsyncStorage.setItem('@tasks', JSON.stringify(updatedTasks));
   };
 
+  const handleEditClick = (task: ITask) => {
+    setEditingTask(task);
+    setNewTask(task.title);
+    setIsModalVisible(true);
+    setIsAddTaskModalVisible({ state: true, type: 'FROM_UPDATE_TASK' });
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, padding: 20 }}>
+      <CustomModal
+        isVisible={isModalVisible}
+        setIsVisible={setIsModalVisible}
+        newTask={newTask}
+        setNewTask={setNewTask}
+        handleAction={handleAction}
+        modalType={isAddTaskModalVisible.type}
+        taskToNotify={taskToNotify}
+      />
       <KeyboardAvoidingView behavior="padding" style={{ padding: 20 }}>
-        <ScrollView
-          style={{ padding: 20 }}
-          contentContainerStyle={{ flexGrow: 1 }}
-        >
+        <View style={{ padding: 20 }}>
           <View
             style={{ flexDirection: 'row', justifyContent: 'space-between' }}
           >
             <Button title="Reset" onPress={handleReset} />
             <Button
               title="Add Task"
-              onPress={() => setIsAddTaskModalVisible(true)}
+              onPress={() => {
+                setIsModalVisible(true);
+                setIsAddTaskModalVisible({
+                  state: true,
+                  type: 'FROM_ADD_TASK',
+                });
+              }}
             />
           </View>
           <FlatList
@@ -143,82 +173,17 @@ export default function App() {
             renderItem={({ item }) => (
               <Task
                 task={item}
-                onTaskToggle={onTaskToggle}
-                handleNotification={handleNotification}
-                deleteActionSheetHandler={deleteActionSheetHandler}
-                editingTask={editingTask}
-                setEditingTask={setEditingTask}
-                handleTitleChange={handleTitleChange}
+                onNotificationClick={handleNotification}
+                onToggleClick={onTaskToggle}
+                onDeleteClick={deleteActionSheetHandler}
+                onEditClick={handleEditClick}
               />
             )}
             keyExtractor={(item) => item.id}
             style={{ marginTop: 20 }}
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
-      <Modal
-        visible={isAddTaskModalVisible}
-        onRequestClose={() => {
-          setIsAddTaskModalVisible(false);
-        }}
-        style={{
-          width: Dimensions.get('window').width,
-          height: Dimensions.get('window').height,
-          borderRadius: 10,
-          borderWidth: 2,
-          borderColor: '#ccc',
-          justifyContent: 'center',
-          position: 'absolute',
-
-          transform: [
-            { translateX: -Dimensions.get('window').width / 4 },
-            { translateY: -Dimensions.get('window').height / 4 },
-          ],
-          alignItems: 'center',
-        }}
-      >
-        <View
-          style={{
-            width: Dimensions.get('window').width / 1.5,
-            height: Dimensions.get('window').height / 1.5,
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: [
-              { translateX: -Dimensions.get('window').width / 3 },
-              { translateY: -Dimensions.get('window').height / 3 },
-            ],
-            borderRadius: 10,
-            borderWidth: 2,
-            borderColor: '#ccc',
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: '#fff',
-            padding: 20,
-          }}
-        >
-          <Pressable
-            style={{ position: 'absolute', top: 10, right: 10 }}
-            onPress={() => setIsAddTaskModalVisible(false)}
-          >
-            <IconSymbol name="xmark" size={24} color="#000" />
-          </Pressable>
-          {/* <TaskForm onSubmit={addTask} /> */}
-          <TextInput
-            value={newTask}
-            onChangeText={setNewTask}
-            placeholder="Enter a new task"
-            style={{
-              borderWidth: 1,
-              borderColor: '#ccc',
-              padding: 10,
-              marginBottom: 10,
-              width: '100%',
-            }}
-          />
-          <Button title="Add Task" onPress={addTask} />
         </View>
-      </Modal>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
