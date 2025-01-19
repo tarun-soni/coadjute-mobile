@@ -5,6 +5,10 @@ import {
   FlatList,
   SafeAreaView,
   KeyboardAvoidingView,
+  Keyboard,
+  Pressable,
+  Text,
+  StyleSheet,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -12,16 +16,17 @@ import Task from '@/components/Task';
 import { sampleTasks } from './data/sampleTasks';
 import { ITask, MODAL_OPEN_FROM_STATES } from '@/types/appType';
 import CustomModal from '@/components/CustomModal';
+import { useRouter } from 'expo-router';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
 
 export default function App() {
-  const [tasks, setTasks] = useState<ITask[]>(sampleTasks as ITask[]);
+  const [tasks, setTasks] = useState<ITask[]>([]);
   const [newTask, setNewTask] = useState('');
   const [editingTask, setEditingTask] = useState<ITask | null>(null);
 
@@ -35,6 +40,8 @@ export default function App() {
   });
   const [isModalVisible, setIsModalVisible] = useState(false);
 
+  const router = useRouter();
+
   useEffect(() => {
     loadTasks();
     requestPermissions();
@@ -47,6 +54,18 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    const responseListener =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        console.log('Notification response received:', response);
+        router.push(`/task/${response.notification.request.content.data.id}`);
+      });
+
+    return () => {
+      responseListener.remove();
+    };
+  }, [isModalVisible]);
+
   const loadTasks = async () => {
     try {
       const storedTasks = await AsyncStorage.getItem('@tasks');
@@ -56,14 +75,11 @@ export default function App() {
     }
   };
 
-  const handleReset = () => {
-    setTasks(sampleTasks);
-    AsyncStorage.removeItem('@tasks');
-  };
-
   const handleAction = async () => {
+    console.log('handleAction', isAddTaskModalVisible, taskToNotify);
     try {
       if (newTask.trim() === '') return;
+
       if (isAddTaskModalVisible.type === 'FROM_UPDATE_TASK' && editingTask) {
         const updatedTasks = tasks.map((task) =>
           task.id === editingTask.id ? { ...task, title: newTask } : task
@@ -71,42 +87,45 @@ export default function App() {
         setTasks(updatedTasks as ITask[]);
         await AsyncStorage.setItem('@tasks', JSON.stringify(updatedTasks));
         setEditingTask(null);
-        setIsModalVisible(false);
-      } else if (isAddTaskModalVisible.type === 'FROM_ADD_TASK') {
+      }
+      if (isAddTaskModalVisible.type === 'FROM_ADD_TASK') {
         const newTaskItem = { id: Date.now().toString(), title: newTask };
         const updatedTasks = [...tasks, newTaskItem];
         setTasks(updatedTasks as ITask[]);
         await AsyncStorage.setItem('@tasks', JSON.stringify(updatedTasks));
-        setIsModalVisible(false);
       }
+
       setNewTask('');
       setIsModalVisible(false);
+      router.push('/');
     } catch (error) {
       console.error('Error handling action:', error);
     }
   };
 
-  const scheduleNotification = async (task: ITask) => {
+  const scheduleNotification = async (task: ITask, trigger: Date) => {
     try {
+      alert(`Notification scheduled for Task - ${task.title}`);
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Task Reminder',
           body: task.title,
+          data: {
+            id: task.id,
+          },
         },
-        // @ts-ignore
-        trigger: { type: 'timeInterval', seconds: 10 }, // 10 sec from now
+        trigger,
       });
     } catch (error) {
       console.error('Error scheduling notification:', error);
+      alert('Could not schedule notification for past date and time');
     }
   };
 
   const handleNotification = (task: ITask) => {
-    console.log('Notification received for task:', task.title);
     setIsModalVisible(true);
     setIsAddTaskModalVisible({ state: true, type: 'FROM_NOTIFY_TASK' });
     setTaskToNotify(task);
-    // scheduleNotification(task);
   };
 
   const deleteActionSheetHandler = (task: ITask) => {
@@ -123,14 +142,8 @@ export default function App() {
     );
   };
 
-  const handleTitleChange = (task: ITask) => {
-    console.log('Title changed:', task.title);
-
-    const updatedTasks = tasks.map((t) =>
-      t.id === task.id ? { ...t, title: task.title } : t
-    );
-    setTasks(updatedTasks as ITask[]);
-    AsyncStorage.setItem('@tasks', JSON.stringify(updatedTasks));
+  const onTaskClick = (task: ITask) => {
+    router.push(`/task/${task.id}`);
   };
 
   const handleEditClick = (task: ITask) => {
@@ -140,25 +153,36 @@ export default function App() {
     setIsAddTaskModalVisible({ state: true, type: 'FROM_UPDATE_TASK' });
   };
 
+  const handleCloseModal = () => {
+    setNewTask('');
+
+    setIsModalVisible(false);
+    setIsAddTaskModalVisible({
+      state: false,
+      type: 'FROM_NOTIFY_TASK',
+    });
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, padding: 20 }}>
-      <CustomModal
-        isVisible={isModalVisible}
-        setIsVisible={setIsModalVisible}
-        newTask={newTask}
-        setNewTask={setNewTask}
-        handleAction={handleAction}
-        modalType={isAddTaskModalVisible.type}
-        taskToNotify={taskToNotify}
-      />
       <KeyboardAvoidingView behavior="padding" style={{ padding: 20 }}>
+        <CustomModal
+          isVisible={isModalVisible}
+          setIsVisible={setIsModalVisible}
+          newTask={newTask}
+          setNewTask={setNewTask}
+          handleAction={handleAction}
+          modalType={isAddTaskModalVisible.type}
+          taskToNotify={taskToNotify}
+          scheduleNotification={scheduleNotification}
+          handleCloseModal={handleCloseModal}
+        />
         <View style={{ padding: 20 }}>
           <View
             style={{ flexDirection: 'row', justifyContent: 'space-between' }}
           >
-            <Button title="Reset" onPress={handleReset} />
-            <Button
-              title="Add Task"
+            <Pressable
+              style={styles.addTaskButton}
               onPress={() => {
                 setIsModalVisible(true);
                 setIsAddTaskModalVisible({
@@ -166,10 +190,35 @@ export default function App() {
                   type: 'FROM_ADD_TASK',
                 });
               }}
-            />
+            >
+              <Text style={{ color: 'white' }}>Add Task</Text>
+            </Pressable>
           </View>
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: 'normal',
+              marginTop: 20,
+              marginBottom: 10,
+            }}
+          >
+            Task List
+          </Text>
           <FlatList
             data={tasks}
+            ListEmptyComponent={() => (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 20, fontWeight: 'normal' }}>
+                  No tasks found
+                </Text>
+              </View>
+            )}
             renderItem={({ item }) => (
               <Task
                 task={item}
@@ -177,6 +226,7 @@ export default function App() {
                 onToggleClick={onTaskToggle}
                 onDeleteClick={deleteActionSheetHandler}
                 onEditClick={handleEditClick}
+                onTaskClick={onTaskClick}
               />
             )}
             keyExtractor={(item) => item.id}
@@ -187,3 +237,14 @@ export default function App() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  addTaskButton: {
+    backgroundColor: '#574bc4',
+    padding: 10,
+    borderRadius: 5,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

@@ -4,6 +4,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Pressable,
 } from 'react-native';
 import React, { FC } from 'react';
 import { IconSymbol } from './ui/IconSymbol';
@@ -14,6 +15,7 @@ interface TaskProps {
     title: string;
     completed: boolean;
   };
+  onTaskClick: (task: TaskProps['task']) => void;
   onNotificationClick: (task: TaskProps['task']) => void;
   onEditClick: (task: TaskProps['task']) => void;
   onDeleteClick: (task: TaskProps['task']) => void;
@@ -22,14 +24,14 @@ interface TaskProps {
 
 const Task: FC<TaskProps> = ({
   task,
-
+  onTaskClick,
   onNotificationClick,
   onEditClick,
   onDeleteClick,
   onToggleClick,
 }) => {
   return (
-    <View
+    <Pressable
       key={task.id}
       style={{
         flexDirection: 'row',
@@ -43,6 +45,7 @@ const Task: FC<TaskProps> = ({
         justifyContent: 'space-between',
         width: '100%',
       }}
+      onPress={() => onTaskClick(task)}
     >
       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
         <TouchableOpacity
@@ -101,7 +104,7 @@ const Task: FC<TaskProps> = ({
           <IconSymbol name="trash.fill" size={20} color="#cc3743" />
         </TouchableOpacity>
       </View>
-    </View>
+    </Pressable>
   );
 };
 
